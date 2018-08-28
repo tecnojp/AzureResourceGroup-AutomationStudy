@@ -25,15 +25,15 @@
       "type": "securestring"
     },
     "JpauloVMWindowsOSVersion": {
-      "type": "string",
-      "defaultValue": "2016-Datacenter",
       "allowedValues": [
         "2008-R2-SP1",
         "2012-Datacenter",
         "2012-R2-Datacenter",
         "2016-Datacenter",
         "Windows-Server-Technical-Preview"
-      ]
+      ],
+      "defaultValue": "2016-Datacenter",
+      "type": "string"
     }},
   "variables": {
     "JpauloSAName": "[concat('JpauloSA', uniqueString(resourceGroup().id))]",
