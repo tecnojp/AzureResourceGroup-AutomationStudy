@@ -1,8 +1,171 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
-  "parameters": {},
-  "variables": {},
-  "resources": [],
+  "parameters": {
+    "JpauloSAType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_ZRS",
+        "Standard_GRS",
+        "Standard_RAGRS",
+        "Premium_LRS"
+      ]
+    },
+    "JpauloVMName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "JpauloVMAdminUserName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "JpauloVMAdminPassword": {
+      "type": "securestring"
+    },
+    "JpauloVMWindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2016-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "2016-Datacenter",
+        "Windows-Server-Technical-Preview"
+      ]
+    }},
+  "variables": {
+    "JpauloSAName": "[concat('JpauloSA', uniqueString(resourceGroup().id))]",
+    "JpauloVNPrefix": "10.0.0.0/16",
+    "JpauloVNSubnet1Name": "Subnet-1",
+    "JpauloVNSubnet1Prefix": "10.0.0.0/24",
+    "JpauloVNSubnet2Name": "Subnet-2",
+    "JpauloVNSubnet2Prefix": "10.0.1.0/24",
+    "JpauloVMImagePublisher": "MicrosoftWindowsServer",
+    "JpauloVMImageOffer": "WindowsServer",
+    "JpauloVMOSDiskName": "JpauloVMOSDisk",
+    "JpauloVMVmSize": "Standard_D2_v2",
+    "JpauloVMVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'JpauloVN')]",
+    "JpauloVMSubnetRef": "[concat(variables('JpauloVMVnetID'), '/subnets/', variables('JpauloVNSubnet1Name'))]",
+    "JpauloVMStorageAccountContainerName": "vhds",
+    "JpauloVMNicName": "[concat(parameters('JpauloVMName'), 'NetworkInterface')]"},
+  "resources": [
+    {
+      "name": "[variables('JpauloSAName')]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-01-01",
+      "sku": {
+        "name": "[parameters('JpauloSAType')]"
+      },
+      "dependsOn": [ ],
+      "tags": {
+        "displayName": "JpauloSA"
+      },
+      "kind": "Storage"
+    },
+    {
+      "name": "JpauloVN",
+      "type": "Microsoft.Network/virtualNetworks",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [ ],
+      "tags": {
+        "displayName": "JpauloVN"
+      },
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('JpauloVNPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('JpauloVNSubnet1Name')]",
+            "properties": {
+              "addressPrefix": "[variables('JpauloVNSubnet1Prefix')]"
+            }
+          },
+          {
+            "name": "[variables('JpauloVNSubnet2Name')]",
+            "properties": {
+              "addressPrefix": "[variables('JpauloVNSubnet2Prefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('JpauloVMNicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', 'JpauloVN')]"
+      ],
+      "tags": {
+        "displayName": "JpauloVMNic"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('JpauloVMSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[parameters('JpauloVMName')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('JpauloSAName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('JpauloVMNicName'))]"
+      ],
+      "tags": {
+        "displayName": "JpauloVM"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('JpauloVMVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('JpauloVMName')]",
+          "adminUsername": "[parameters('JpauloVMAdminUsername')]",
+          "adminPassword": "[parameters('JpauloVMAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('JpauloVMImagePublisher')]",
+            "offer": "[variables('JpauloVMImageOffer')]",
+            "sku": "[parameters('JpauloVMWindowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "JpauloVMOSDisk",
+            "vhd": {
+              "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('JpauloSAName')), '2016-01-01').primaryEndpoints.blob, variables('JpauloVMStorageAccountContainerName'), '/', variables('JpauloVMOSDiskName'), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('JpauloVMNicName'))]"
+            }
+          ]
+        }
+      }
+    }],
   "outputs": {}
 }
